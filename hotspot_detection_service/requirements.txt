@@ -1,0 +1,7 @@
+fastapi
+pymongo
+confluent-kafka
+schedule
+uvicorn
+prometheus-client
+starlette

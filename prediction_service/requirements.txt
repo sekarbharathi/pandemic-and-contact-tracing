@@ -1,0 +1,13 @@
+fastapi
+pydantic
+grpcio
+joblib
+confluent-kafka
+uvicorn
+scikit-learn
+joblib  
+numpy
+pandas
+protobuf
+grpcio-tools
+prometheus-client

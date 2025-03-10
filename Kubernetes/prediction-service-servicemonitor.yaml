@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prediction-service
+  namespace: monitoring-distributedsystems
+  labels:
+    release: monitoring-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      io.kompose.service: prediction-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 10s
+      scheme: "http"

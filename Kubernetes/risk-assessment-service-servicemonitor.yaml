@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: risk-assessment-service
+  namespace: monitoring-distributedsystems 
+  labels:
+    release: monitoring-stack  # Ensure this matches your Prometheus instance's label selector
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      io.kompose.service: risk-assessment-service
+  endpoints:
+    - port: "metrics"
+      path: "/metrics"
+      interval: 15s  # Scrape metrics every 15 seconds
+      scheme: "http"

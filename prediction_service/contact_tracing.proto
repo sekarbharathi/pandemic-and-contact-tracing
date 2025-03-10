@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package contact_tracing;
+
+// The request message for sending outbreak location
+message OutbreakLocationRequest {
+  string location_name = 1;  // Name of the location where the outbreak occurred
+}
+
+// The response message for sending the result of the outbreak location check
+message OutbreakLocationResponse {
+  string status = 1;        // Status of the request (e.g., "success", "failure")
+  repeated string user_ids = 2; // List of user IDs found for the outbreak location
+}
+
+// The ContactTracing service definition
+service ContactTracingService {
+  // Sends the outbreak location and returns users in that location
+  rpc SendOutbreakLocation(OutbreakLocationRequest) returns (OutbreakLocationResponse);
+}

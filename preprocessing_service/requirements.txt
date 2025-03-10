@@ -1,0 +1,6 @@
+fastapi
+confluent_kafka
+requests
+uvicorn
+prometheus-client
+starlette

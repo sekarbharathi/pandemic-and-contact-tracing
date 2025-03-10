@@ -1,0 +1,235 @@
+version: "3.7"
+
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.8
+    container_name: zookeeper
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+    networks:
+      - my_network
+
+  kafka-init:
+    image: bitnami/kafka:3.0
+    container_name: kafka_topics
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      # Wait for Kafka to be ready
+      sleep 10;
+      kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic prediction_input;
+      kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic hotspot_alerts;
+      kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic outbreak_alerts;
+      echo 'Kafka topics created successfully';
+      "
+    ports:
+      - "8007:8007"
+    networks:
+      - my_network
+
+  kafka:
+    image: bitnami/kafka:3.0
+    container_name: kafka
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    restart: always
+    networks:
+      - my_network
+
+  # MongoDB service
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    environment:
+      MONGO_INITDB_DATABASE: health_data
+    ports:
+      - "27017:27017"
+    networks:
+      - my_network
+
+  # Database Service
+  database-service:
+    build: ./database_service
+    container_name: database_service
+    ports:
+      - "8001:8001"
+    depends_on:
+      - mongo
+    networks:
+      - my_network
+
+  preprocessing-service:
+    build:
+      context: ./preprocessing_service  # Folder where Dockerfile is located
+      dockerfile: Dockerfile
+    container_name: preprocessing_service
+    depends_on:
+      - kafka
+      - database-service
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - API_URL=http://database-service:8001/api/v1/data
+    ports:
+      - "8002:8002"  # Changed the port mapping to match the internal port 8000
+    networks:
+      - my_network
+
+  realtime-data-service:
+    build:
+      context: ./realtime_data_service  # Folder containing realtime_data_service Dockerfile
+    container_name: realtime_data_service
+    ports:
+      - "8003:8003"
+    restart: always
+    environment:
+      - API_URL=http://preprocessing-service:8002/process  # Using service name of preprocessing_service
+    # volumes:
+    #   - /app
+    depends_on:
+      - preprocessing-service
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://preprocessing-service:8002/health || exit 1"]
+      interval: 30s
+      retries: 5
+      start_period: 60s
+      timeout: 10s
+    networks:
+      - my_network
+
+  # Prediction Service
+  prediction-service:
+    build:
+      context: ./prediction_service  # Directory containing the FastAPI service's Dockerfile
+    container_name: prediction_service
+    ports:
+      - "8004:8004"
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - CONTACT_TRACING_GRPC=contact_tracing_service:50051  # gRPC contact tracing service
+    depends_on:
+      - kafka
+      - preprocessing-service
+    restart: always
+    healthcheck:
+        test: ["CMD-SHELL", "nc -z kafka 9092"]
+        interval: 30s
+        retries: 5
+        start_period: 60s
+        timeout: 10s
+    networks:
+      - my_network
+    
+
+  contact-tracing-service:
+    build:
+      context: ./contact_tracing_service  # Folder containing the contact tracing service Dockerfile
+    container_name: contact_tracing_service
+    ports:
+      - "50051:50051"  # Exposing gRPC port
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - CONTACT_TRACING_GRPC=contact_tracing_service:50051 
+    depends_on:
+      - mongo
+      - kafka
+      - prediction-service
+    restart: always
+    healthcheck:
+        test: ["CMD-SHELL", "nc -z kafka 9092"]
+        interval: 30s
+        retries: 5
+        start_period: 60s
+        timeout: 10s
+    networks:
+      - my_network
+
+
+  notification-service:
+      build:
+        context: ./notification_service  # Folder containing the notification service code
+      container_name: notification_service
+      ports:
+      - "8006:8006"
+      environment:
+        - KAFKA_BROKER=kafka:9092
+      depends_on:
+        - kafka
+        - contact-tracing-service
+      restart: always
+      healthcheck:
+        test: ["CMD-SHELL", "nc -z kafka 9092"]
+        interval: 30s
+        retries: 5
+        start_period: 60s
+        timeout: 10s
+      networks:
+        - my_network
+
+  hotspot-detection-service:
+    build: ./hotspot_detection_service
+    container_name: hotspot_detection_service
+    ports:
+      - "8005:8005"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      - mongo
+      - kafka
+    restart: always
+    healthcheck:
+        test: ["CMD-SHELL", "nc -z kafka 9092"]
+        interval: 30s
+        retries: 5
+        start_period: 60s
+        timeout: 10s
+    networks:
+      - my_network
+
+
+  risk-assessment-service:
+    build: ./risk_assessment_service
+    container_name: risk_assessment_service
+    ports:
+      - "8008:8008"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      - mongo
+      - kafka
+      - hotspot-detection-service
+    restart: always
+    healthcheck:
+        test: ["CMD-SHELL", "nc -z kafka 9092"]
+        interval: 30s
+        retries: 5
+        start_period: 60s
+        timeout: 10s
+    networks:
+      - my_network
+
+
+networks:
+  my_network:
+    driver: bridge
+
+
+volumes:
+  zookeeper-data:
+    driver: local
+  kafka-data:
+    driver: local
+  mongo-data:
+    driver: local

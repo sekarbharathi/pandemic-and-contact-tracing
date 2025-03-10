@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: database-service
+  namespace: monitoring-distributedsystems  # Change this if needed
+  labels:
+    release: monitoring-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - default  # This ensures it scrapes services in the 'default' namespace
+  selector:
+    matchLabels:
+      io.kompose.service: database-service
+  endpoints:
+    - port: "metrics"  # Must match the port name in your Service definition
+      path: "/metrics"  # Ensure the database service exposes this
+      interval: 15s
+      scheme: "http"

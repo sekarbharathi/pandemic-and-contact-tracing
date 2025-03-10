@@ -1,0 +1,6 @@
+grpcio
+pymongo
+confluent-kafka
+protobuf
+grpcio-tools
+prometheus_client

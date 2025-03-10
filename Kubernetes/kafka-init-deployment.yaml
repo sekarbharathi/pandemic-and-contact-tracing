@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: C:\Kompose\kompose-windows-amd64.exe convert --controller deployment
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: kafka-init
+  name: kafka-init
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: kafka-init
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: C:\Kompose\kompose-windows-amd64.exe convert --controller deployment
+        kompose.version: 1.35.0 (9532ceef3)
+      labels:
+        io.kompose.service: kafka-init
+    spec:
+      containers:
+        - args:
+            - |2
+              # Wait for Kafka to be ready
+              sleep 10;
+              kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic prediction_input;
+              kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic hotspot_alerts;
+              kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --replication-factor 1 --partitions 1 --topic outbreak_alerts;
+              echo 'Kafka topics created successfully';
+          command:
+            - /bin/sh
+            - -c
+          image: bitnami/kafka:3.0
+          name: kafka-topics
+          ports:
+            - containerPort: 8007
+              protocol: TCP
+      restartPolicy: Always

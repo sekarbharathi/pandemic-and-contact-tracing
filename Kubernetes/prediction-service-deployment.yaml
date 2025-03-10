@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: C:\Kompose\kompose-windows-amd64.exe convert --controller deployment
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: prediction-service
+  name: prediction-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: prediction-service
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: C:\Kompose\kompose-windows-amd64.exe convert --controller deployment
+        kompose.version: 1.35.0 (9532ceef3)
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8004"
+      labels:
+        io.kompose.service: prediction-service
+    spec:
+      containers:
+        - env:
+            - name: CONTACT_TRACING_GRPC
+              value: contact_tracing_service:50051
+            - name: KAFKA_BROKER
+              value: kafka:9092
+          image: bsekar24/distributedsystems2-prediction-service:latest 
+          imagePullPolicy: Always
+          livenessProbe:
+            exec:
+              command:
+                - nc -z kafka 9092
+            failureThreshold: 5
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          name: prediction-service
+          ports:
+            - containerPort: 8004
+              protocol: TCP
+      restartPolicy: Always
